@@ -10,31 +10,41 @@
 int main(int argc, char *argv[])
 {
     if (argc != 2) {
-        printf("Usage : %s <file_to_open>\n", argv[0]);
-        return 0;
+        fprintf(stderr, "Usage : %s <file_to_open>\n", argv[0]);
+        return EXIT_FAILURE;
     }
 
     struct stat sb;
     if (stat(argv[1], &sb) == -1) {
-        printf("Cannot access to file : %s \n", argv[1]);
-        return 0;
+        fprintf(stderr, "Cannot access to file : %s \n", argv[1]);
+        return EXIT_FAILURE;
     }
 
     FILE *file = fopen(argv[1], "r");
-    char *buf = (char *) calloc(sb.st_size, 1);
+    if (!file) {
+        fprintf(stderr, "Cannot open file : %s \n", argv[1]);
+        return EXIT_FAILURE;
+    }
 
-    int size=0;
-    char **lines = NULL;
+    char *buf;
+    if ( (buf = (char *) calloc(sb.st_size, 1)) == NULL ){
+        fprintf(stderr, "Error: memory alloc", argv[0]);
+        return EXIT_FAILURE;
+    }
 
-    while (!feof(file))
+    int lines = 0;
+    char **text = NULL;
+
+    while (!fgets(buf, sb.st_size, file))
     {
-        fgets(buf, sb.st_size, file);
-        if (!lines)
-            lines = malloc((size = 1) * sizeof(char *));
-        else
-            lines = realloc(lines, ++size * sizeof(char *));
+        if (!text) {
+            text = malloc((lines = 1) * sizeof(char *));
+        }
+        else {
+            text = realloc(text, ++lines * sizeof(char *));
+        }
 
-        lines[size-1] = strdup(buf);
+        text[lines - 1] = strdup(buf);
     }
     fclose(file);
 
@@ -45,48 +55,67 @@ int main(int argc, char *argv[])
 
     printw("File: %s, len: %d", argv[1], sb.st_size);
 
-    int startx  = 4, starty  = 3,
-        scrollx = 0, scrolly = 0;
+    int win_left  = 4, win_top  = 3,
+            horiz_scroll = 0, vert_scroll = 0;
 
-    int height = (LINES - starty) / 2,
-        width  = (COLS  - startx) / 2;
+    int win_lines = (LINES - win_top) / 2,
+            win_cols  = (COLS  - win_left) / 2;
 
-    WINDOW *box_win  = newwin(height+1, width+1, starty, startx);
+    WINDOW *win  = newwin(win_lines + 1, win_cols + 1, win_top, win_left);
 
-    box(box_win, 0, 0);
-    wrefresh(box_win);
+    box(win, 0, 0);
+    wrefresh(win);
 
-    int num_len = sprintf(buf, "%d", size);
-    sprintf(buf, "%%%dd: %%.%ds", num_len, width-num_len-3);
+    int num_len = sprintf(buf, "%d", lines);
+
+    sprintf(buf, "%%%dd: %%.%ds", num_len, (win_cols - num_len - 3) );
     char *mask = strdup(buf);
 
     int ch;
     while((ch = getch()) != KEY_ESC)
     {
-        if ((ch == KEY_LEFT) && (scrollx > 0)) {
-            scrollx--;
+        if ((ch == KEY_LEFT) && (horiz_scroll > 0)) {
+            horiz_scroll--;
         }
         else if (ch == KEY_RIGHT) {
-            scrollx++;
+            horiz_scroll++;
         }
-        else if ((ch == KEY_UP) && (scrolly > 0)) {
-            scrolly--;
+        else if ((ch == KEY_UP) && (vert_scroll > 0)) {
+            vert_scroll--;
         }
         else if (ch == KEY_DOWN) {
-            scrolly++;
+            vert_scroll++;
         }
-        wclear(box_win);
+        wclear(win);
 
-        int l;
-        for (l = 0; l < height; l++)
-            mvwprintw(box_win, l, 1, mask, l+scrolly, (l+scrolly < size && scrollx < strlen(lines[l+scrolly])) ? lines[l+scrolly]+scrollx : "");
-            //mvwprintw(box_win, l+1, 1, "%d", strlen(lines[l]));
-        box(box_win, 0, 0);
-        wrefresh(box_win);
+        for (int l = 0; l < win_lines; l++)
+        {
+            int new_line = l + vert_scroll;
+
+            char *display_text = "";
+            if (new_line < lines)
+            {
+                if (horiz_scroll < strlen(text[new_line])) {
+                    display_text = text[new_line] + horiz_scroll;
+                }
+            }
+
+            mvwprintw(win, l, 1, mask, new_line, display_text);
+        }
+
+        box(win, 0, 0);
+        wrefresh(win);
 
     }
 
     endwin();
+
+    free(buf);
+    free(mask);
+
+    for (int i = 0; i < lines; i++) {
+        free(text[i]);
+    }
 
     return 0;
 }
