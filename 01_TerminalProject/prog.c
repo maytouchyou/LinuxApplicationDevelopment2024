@@ -14,6 +14,8 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+
+    // File operations
     struct stat sb;
     if (stat(argv[1], &sb) == -1) {
         fprintf(stderr, "Cannot access to file : %s \n", argv[1]);
@@ -48,6 +50,8 @@ int main(int argc, char *argv[])
     }
     fclose(file);
 
+
+    // Initialize ncurses engine
     initscr();
     cbreak();
     keypad(stdscr, TRUE);
@@ -55,6 +59,8 @@ int main(int argc, char *argv[])
 
     printw("File: %s, len: %d", argv[1], sb.st_size);
 
+
+    // Geometry of scrollable window
     int win_left  = 4, win_top  = 3,
         horiz_scroll = 0, vert_scroll = 0;
 
@@ -66,11 +72,15 @@ int main(int argc, char *argv[])
     box(win, 0, 0);
     wrefresh(win);
 
+
+    // File description above window
     int num_len = sprintf(buf, "%d", lines);
 
     sprintf(buf, "%%%dd: %%.%ds", num_len, (win_cols - num_len - 3) );
     char *mask = strdup(buf);
 
+
+    //Process keypress & refresh window
     int ch;
     while((ch = getch()) != KEY_ESC)
     {
@@ -105,11 +115,11 @@ int main(int argc, char *argv[])
 
         box(win, 0, 0);
         wrefresh(win);
-
     }
 
     endwin();
 
+    // Memory clean
     free(buf);
     free(mask);
 
