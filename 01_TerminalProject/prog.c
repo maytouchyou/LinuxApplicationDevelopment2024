@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
     int lines = 0;
     char **text = NULL;
 
-    while (!fgets(buf, sb.st_size, file))
+    while (fgets(buf, sb.st_size, file))
     {
         if (!text) {
             text = malloc((lines = 1) * sizeof(char *));
@@ -56,10 +56,10 @@ int main(int argc, char *argv[])
     printw("File: %s, len: %d", argv[1], sb.st_size);
 
     int win_left  = 4, win_top  = 3,
-            horiz_scroll = 0, vert_scroll = 0;
+        horiz_scroll = 0, vert_scroll = 0;
 
     int win_lines = (LINES - win_top) / 2,
-            win_cols  = (COLS  - win_left) / 2;
+        win_cols  = (COLS  - win_left) / 2;
 
     WINDOW *win  = newwin(win_lines + 1, win_cols + 1, win_top, win_left);
 
