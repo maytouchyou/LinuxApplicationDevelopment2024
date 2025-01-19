@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
     }
 
 
-    // File operations
+    // File routines
     struct stat sb;
     if (stat(argv[1], &sb) == -1) {
         fprintf(stderr, "Cannot access to file : %s \n", argv[1]);
@@ -30,7 +30,7 @@ int main(int argc, char *argv[])
 
     char *buf;
     if ( (buf = (char *) calloc(sb.st_size, 1)) == NULL ){
-        fprintf(stderr, "Error: memory alloc", argv[0]);
+        fprintf(stderr, "Error: memory alloc");
         return EXIT_FAILURE;
     }
 
@@ -46,12 +46,20 @@ int main(int argc, char *argv[])
             text = realloc(text, ++lines * sizeof(char *));
         }
 
-        text[lines - 1] = strdup(buf);
+        if (!text) {
+            fprintf(stderr, "Error: memory alloc");
+            return EXIT_FAILURE;
+        }
+
+        if (!(text[lines - 1] = strdup(buf))) {
+            fprintf(stderr, "Error: memory alloc");
+            return EXIT_FAILURE;
+        }
     }
     fclose(file);
 
 
-    // Initialize ncurses engine
+    // Ncurses engine initialization
     initscr();
     cbreak();
     keypad(stdscr, TRUE);
@@ -60,7 +68,7 @@ int main(int argc, char *argv[])
     printw("File: %s, len: %d", argv[1], sb.st_size);
 
 
-    // Geometry of scrollable window
+    // Default scrollable window geometry
     int win_left  = 4, win_top  = 3,
         horiz_scroll = 0, vert_scroll = 0;
 
@@ -73,14 +81,14 @@ int main(int argc, char *argv[])
     wrefresh(win);
 
 
-    // File description above window
+    // Create file description above window
     int num_len = sprintf(buf, "%d", lines);
 
     sprintf(buf, "%%%dd: %%.%ds", num_len, (win_cols - num_len - 3) );
     char *mask = strdup(buf);
 
 
-    //Process keypress & refresh window
+    // User input process
     int ch;
     while((ch = getch()) != KEY_ESC)
     {
@@ -119,7 +127,7 @@ int main(int argc, char *argv[])
 
     endwin();
 
-    // Memory clean
+
     free(buf);
     free(mask);
 
@@ -127,5 +135,5 @@ int main(int argc, char *argv[])
         free(text[i]);
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
