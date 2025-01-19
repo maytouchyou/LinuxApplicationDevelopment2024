@@ -81,7 +81,7 @@ int main(int argc, char *argv[])
     wrefresh(win);
 
 
-    // Create file description above window
+    // Print file description above window
     int num_len = sprintf(buf, "%d", lines);
 
     sprintf(buf, "%%%dd: %%.%ds", num_len, (win_cols - num_len - 3) );
@@ -111,6 +111,8 @@ int main(int argc, char *argv[])
             int new_line = l + vert_scroll;
 
             char *display_text = "";
+
+            // If we move outside the window print empty lines
             if (new_line < lines)
             {
                 if (horiz_scroll < strlen(text[new_line])) {
