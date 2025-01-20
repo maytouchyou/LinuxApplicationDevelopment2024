@@ -90,8 +90,29 @@ int main(int argc, char *argv[])
 
     // User input process
     int ch;
-    while((ch = getch()) != KEY_ESC)
-    {
+    do {
+        wclear(win);
+
+        for (int l = 0; l < win_lines; l++)
+        {
+            int new_line = l + vert_scroll;
+
+            // Print empty line when we scroll text outside the window
+            char *display_text = "";
+
+            if (new_line < lines)
+            {
+                if (horiz_scroll < strlen(text[new_line])) {
+                    display_text = text[new_line] + horiz_scroll;
+                }
+            }
+            mvwprintw(win, l, 1, mask, new_line, display_text);
+        }
+
+        box(win, 0, 0);
+        wrefresh(win);
+
+        ch = getch();
         if ((ch == KEY_LEFT) && (horiz_scroll > 0)) {
             horiz_scroll--;
         }
@@ -104,38 +125,17 @@ int main(int argc, char *argv[])
         else if (ch == KEY_DOWN) {
             vert_scroll++;
         }
-        wclear(win);
 
-        for (int l = 0; l < win_lines; l++)
-        {
-            int new_line = l + vert_scroll;
-
-            char *display_text = "";
-
-            // If we move outside the window print empty lines
-            if (new_line < lines)
-            {
-                if (horiz_scroll < strlen(text[new_line])) {
-                    display_text = text[new_line] + horiz_scroll;
-                }
-            }
-
-            mvwprintw(win, l, 1, mask, new_line, display_text);
-        }
-
-        box(win, 0, 0);
-        wrefresh(win);
-    }
+    } while(ch != KEY_ESC);
 
     endwin();
-
-
-    free(buf);
-    free(mask);
 
     for (int i = 0; i < lines; i++) {
         free(text[i]);
     }
+    free(text);
+    free(buf);
+    free(mask);
 
     return EXIT_SUCCESS;
 }
