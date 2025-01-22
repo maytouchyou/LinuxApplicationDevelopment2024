@@ -7,32 +7,38 @@
 #define KEY_ESC 27
 
 
-int main(int argc, char *argv[])
+/* Default scrollable window geometry */
+
+WINDOW *win;
+
+int win_left, win_top;
+int win_lines, win_cols;
+
+int lines_count;
+char **text_from_file;
+
+
+char** read_file(const char *name, int *size)
 {
-    if (argc != 2) {
-        fprintf(stderr, "Usage : %s <file_to_open>\n", argv[0]);
-        return EXIT_FAILURE;
-    }
-
-
-    // File routines
     struct stat sb;
-    if (stat(argv[1], &sb) == -1) {
-        fprintf(stderr, "Cannot access to file : %s \n", argv[1]);
-        return EXIT_FAILURE;
+    if (stat(name, &sb) == -1) {
+        fprintf(stderr, "Cannot access to file : %s \n", name);
+        exit(EXIT_FAILURE);
     }
 
-    FILE *file = fopen(argv[1], "r");
+    FILE *file = fopen(name, "r");
     if (!file) {
-        fprintf(stderr, "Cannot open file : %s \n", argv[1]);
-        return EXIT_FAILURE;
+        fprintf(stderr, "Cannot open file : %s \n", name);
+        exit(EXIT_FAILURE);
     }
 
     char *buf;
     if ( (buf = (char *) calloc(sb.st_size, 1)) == NULL ){
         fprintf(stderr, "Error: memory alloc");
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
+
+    if (size) *size = sb.st_size;
 
     int lines = 0;
     char **text = NULL;
@@ -48,45 +54,56 @@ int main(int argc, char *argv[])
 
         if (!text) {
             fprintf(stderr, "Error: memory alloc");
-            return EXIT_FAILURE;
+            exit(EXIT_FAILURE);
         }
 
         if (!(text[lines - 1] = strdup(buf))) {
             fprintf(stderr, "Error: memory alloc");
-            return EXIT_FAILURE;
+            exit(EXIT_FAILURE);
         }
     }
     fclose(file);
+    free(buf);
 
+    text_from_file = text;
+    lines_count = lines;
 
-    // Ncurses engine initialization
+    return text;
+}
+
+int init_ncurses()
+{
     initscr();
     cbreak();
     keypad(stdscr, TRUE);
     refresh();
 
-    printw("File: %s, len: %d", argv[1], sb.st_size);
+    win_left  = 4, win_top  = 3;
+    win_lines = (LINES - win_top) / 2;
+    win_cols  = (COLS  - win_left) / 2;
+}
 
-
-    // Default scrollable window geometry
-    int win_left  = 4, win_top  = 3,
-        horiz_scroll = 0, vert_scroll = 0;
-
-    int win_lines = (LINES - win_top) / 2,
-        win_cols  = (COLS  - win_left) / 2;
-
-    WINDOW *win  = newwin(win_lines + 1, win_cols + 1, win_top, win_left);
-
+WINDOW* draw_window(const char *fname, int size)
+{
+    win  = newwin(win_lines + 1, win_cols + 1, win_top, win_left);
     box(win, 0, 0);
     wrefresh(win);
 
-
     // Print file description above window
-    int num_len = sprintf(buf, "%d", lines);
+    printw("File: %s, len: %d", fname, size);
 
-    sprintf(buf, "%%%dd: %%.%ds", num_len, (win_cols - num_len - 3) );
-    char *mask = strdup(buf);
+    return win;
+}
 
+void keypress_loop()
+{
+    char line_prefix[32];
+    int num_len = sprintf(line_prefix, "%d", lines_count);
+
+    char mask[256];
+    sprintf(mask, "%%%dd: %%.%ds", num_len, (win_cols - num_len - 3) );
+
+    int horiz_scroll = 0, vert_scroll = 0;
 
     // User input process
     int ch;
@@ -95,15 +112,14 @@ int main(int argc, char *argv[])
 
         for (int l = 0; l < win_lines; l++)
         {
-            int new_line = l + vert_scroll;
-
             // Print empty line when we scroll text outside the window
             char *display_text = "";
 
-            if (new_line < lines)
+            int new_line = l + vert_scroll;
+            if (new_line < lines_count)
             {
-                if (horiz_scroll < strlen(text[new_line])) {
-                    display_text = text[new_line] + horiz_scroll;
+                if (horiz_scroll < strlen( text_from_file[new_line]) ) {
+                    display_text = text_from_file[new_line] + horiz_scroll;
                 }
             }
             mvwprintw(win, l, 1, mask, new_line, display_text);
@@ -129,13 +145,32 @@ int main(int argc, char *argv[])
     } while(ch != KEY_ESC);
 
     endwin();
+}
 
-    for (int i = 0; i < lines; i++) {
-        free(text[i]);
+void free_memory()
+{
+    for (int i = 0; i < lines_count; i++) {
+        free(text_from_file[i]);
     }
-    free(text);
-    free(buf);
-    free(mask);
+    free(text_from_file);
+}
+
+int main(int argc, char *argv[])
+{
+    if (argc != 2) {
+        fprintf(stderr, "Usage : %s <file_to_open>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    int size;
+    if (text_from_file = read_file(argv[1], &size))
+    {
+        init_ncurses();
+        win = draw_window(argv[1], size);
+
+        keypress_loop();
+        free_memory();
+    }
 
     return EXIT_SUCCESS;
 }
