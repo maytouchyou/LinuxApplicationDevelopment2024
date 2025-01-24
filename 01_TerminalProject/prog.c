@@ -9,36 +9,40 @@
 
 /* Default scrollable window geometry */
 
-WINDOW *win;
+struct win_params_t {
+    WINDOW *win;
 
-int win_left, win_top;
-int win_lines, win_cols;
+    int left, top;
+    int cols, rows;
+    int nc_cols, nc_rows; // ncurses cols & rows
+};
 
-int lines_count;
-char **text_from_file;
+struct file_params_t {
+    int fsize, flines;
+    char *fname;
+    char **ftext;
+};
 
-
-char** read_file(const char *name, int *size)
+bool
+read_file(struct file_params_t *fp)
 {
     struct stat sb;
-    if (stat(name, &sb) == -1) {
-        fprintf(stderr, "Cannot access to file : %s \n", name);
-        exit(EXIT_FAILURE);
+    if (stat(fp->fname, &sb) == -1) {
+        fprintf(stderr, "Cannot access to file : %s \n", fp->fname);
+        return false;
     }
 
-    FILE *file = fopen(name, "r");
+    FILE *file = fopen(fp->fname, "r");
     if (!file) {
-        fprintf(stderr, "Cannot open file : %s \n", name);
-        exit(EXIT_FAILURE);
+        fprintf(stderr, "Cannot open file : %s \n", fp->fname);
+        return false;
     }
 
     char *buf;
     if ( (buf = (char *) calloc(sb.st_size, 1)) == NULL ){
         fprintf(stderr, "Error: memory alloc");
-        exit(EXIT_FAILURE);
+        return false;
     }
-
-    if (size) *size = sb.st_size;
 
     int lines = 0;
     char **text = NULL;
@@ -65,68 +69,76 @@ char** read_file(const char *name, int *size)
     fclose(file);
     free(buf);
 
-    text_from_file = text;
-    lines_count = lines;
-
-    return text;
+    if (fp) {
+        fp->ftext = text;
+        fp->fsize = sb.st_size;
+        fp->flines = lines;
+    }
+    return true;
 }
 
-int init_ncurses()
+int
+init_ncurses(struct win_params_t *wp)
 {
     initscr();
     cbreak();
     keypad(stdscr, TRUE);
     refresh();
 
-    win_left  = 4, win_top  = 3;
-    win_lines = (LINES - win_top) / 2;
-    win_cols  = (COLS  - win_left) / 2;
+    if (wp) {
+        wp->nc_rows = LINES;
+        wp->nc_cols = COLS;
+
+        wp->rows = (LINES - wp->top) / 2;
+        wp->cols  = (COLS  - wp->left) / 2;
+    }
 }
 
-WINDOW* draw_window(const char *fname, int size)
+int
+draw_window(struct win_params_t *wp,
+            const struct file_params_t *fp)
 {
-    win  = newwin(win_lines + 1, win_cols + 1, win_top, win_left);
-    box(win, 0, 0);
-    wrefresh(win);
+    wp->win = newwin(wp->rows + 1, wp->cols + 1, wp->top, wp->left);
 
-    // Print file description above window
-    printw("File: %s, len: %d", fname, size);
-
-    return win;
+    box(wp->win, 0, 0);
+    wrefresh(wp->win);
+    printw("File: %s, len: %d", fp->fname, fp->fsize); // Print file info above window
 }
 
-void keypress_loop()
+void
+keypress_loop(const struct win_params_t *wp,
+              const struct file_params_t *fp)
 {
     char line_prefix[32];
-    int num_len = sprintf(line_prefix, "%d", lines_count);
+    int num_len = sprintf(line_prefix, "%d", fp->flines);
 
     char mask[256];
-    sprintf(mask, "%%%dd: %%.%ds", num_len, (win_cols - num_len - 3) );
+    sprintf( mask, "%%%dd: %%.%ds", num_len, ( wp->cols - num_len - 3 ));
 
     int horiz_scroll = 0, vert_scroll = 0;
 
-    // User input process
+    // Process keyboard events
     int ch;
     do {
-        wclear(win);
+        wclear(wp->win);
 
-        for (int l = 0; l < win_lines; l++)
+        for (int l = 0; l < fp->flines; l++)
         {
             // Print empty line when we scroll text outside the window
             char *display_text = "";
 
             int new_line = l + vert_scroll;
-            if (new_line < lines_count)
+            if (new_line < fp->flines)
             {
-                if (horiz_scroll < strlen( text_from_file[new_line]) ) {
-                    display_text = text_from_file[new_line] + horiz_scroll;
+                if (horiz_scroll < strlen( fp->ftext[new_line] )) {
+                    display_text = fp->ftext[new_line] + horiz_scroll;
                 }
             }
-            mvwprintw(win, l, 1, mask, new_line, display_text);
+            mvwprintw( wp->win, l, 1, mask, new_line, display_text );
         }
 
-        box(win, 0, 0);
-        wrefresh(win);
+        box( wp->win, 0, 0 );
+        wrefresh( wp->win );
 
         ch = getch();
         if ((ch == KEY_LEFT) && (horiz_scroll > 0)) {
@@ -147,12 +159,12 @@ void keypress_loop()
     endwin();
 }
 
-void free_memory()
+void free_memory(struct file_params_t *fp)
 {
-    for (int i = 0; i < lines_count; i++) {
-        free(text_from_file[i]);
+    for (int i = 0; i < fp->flines; i++) {
+        free(fp->ftext[i]);
     }
-    free(text_from_file);
+    free(fp->ftext);
 }
 
 int main(int argc, char *argv[])
@@ -162,14 +174,15 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    int size;
-    if (text_from_file = read_file(argv[1], &size))
-    {
-        init_ncurses();
-        win = draw_window(argv[1], size);
+    struct win_params_t wp = {.left = 3, .top  = 4};
+    struct file_params_t fp = {.fname = argv[1]};
 
-        keypress_loop();
-        free_memory();
+    if (read_file(&fp))
+    {
+        init_ncurses(&wp);
+        draw_window(&wp, &fp);
+        keypress_loop(&wp, &fp);
+        free_memory(&fp);
     }
 
     return EXIT_SUCCESS;
