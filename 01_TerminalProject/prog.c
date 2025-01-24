@@ -110,7 +110,7 @@ keypress_loop(const struct win_params_t *wp,
               const struct file_params_t *fp)
 {
     char line_prefix[32];
-    int num_len = sprintf(line_prefix, "%d", fp->flines);
+    int num_len = snprintf(line_prefix, 32, "%d", fp->flines);
 
     char mask[256];
     sprintf( mask, "%%%dd: %%.%ds", num_len, ( wp->cols - num_len - 3 ));
